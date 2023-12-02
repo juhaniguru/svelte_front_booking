@@ -9,7 +9,7 @@
     let hourChange = 1;
 
     let interval = null;
-    let usePolling = false;
+    let usePolling = true;
 
     times = times.map(() => {
         if (hourChange % 5 == 0) {
@@ -114,13 +114,13 @@
 
         times = times.filter((time) => {
             let splitTime = time.t.split(":");
-            let isBooked = bookings.bookings.find((b) => {
+            let isBookedByOthers = bookings.bookings.find((b) => {
                 return (
                     b.hour == splitTime[0] && b.min == splitTime[1] && !b.own
                 );
             });
 
-            return !isBooked;
+            return !isBookedByOthers;
         });
 
         times = times.map((time) => {

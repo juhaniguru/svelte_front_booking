@@ -10,6 +10,8 @@
 
     let interval = null;
     let usePolling = false;
+    let reconnectInterval = null;
+    let socket = null;
 
     times = times.map(() => {
         if (hourChange % 5 == 0) {
@@ -24,6 +26,8 @@
 
         return { t: `${hour}:${min}`, own: false };
     });
+
+    let defaultTimes = times.slice();
 
     async function _book(time) {
         try {
@@ -91,12 +95,14 @@
             }
 
             await _book(time.t);
+            socket.send(JSON.stringify({ tag: "update" }));
         } catch (e) {
             console.log(e);
         }
     }
 
     async function _getBookings() {
+        console.log("getBookings");
         let headers = {
             "content-type": "application/json",
         };
@@ -131,6 +137,8 @@
 
             return isMine == null ? time : { ...time, own: true };
         });
+
+        console.log(times);
     }
 
     onMount(async () => {
@@ -142,8 +150,56 @@
                 console.log("interval");
                 await _getBookings();
             }, 2000);
+        } else {
+            connect();
         }
     });
+
+    function connect() {
+        socket = new WebSocket("ws://localhost:8001/ws");
+
+        // tämä callback suoritetaan silloin, kun yhteys saadaan
+        socket.onopen = () => {
+            // jos interval ei ole null, se tarkoitaa, että serveri on sammunut ja on yritetty autom. yhdistää uudelleen
+            // nyt kun yhteys on saatu takaisin, voidaan intervalli lopettaa
+            if (reconnectInterval != null) {
+                clearTimeout(reconnectInterval);
+                reconnectInterval = null;
+            }
+            if (socket.readyState == 1) {
+                // tässä client lähettää severille viestin, että on liitytty keskusteluun
+                // serveri sitten lähettää tämän viestin kaikille osallistujille
+                // esim. juhani liittyi keskusteluun
+            }
+        };
+
+        // jos tapahtuu virhe, tullaan tänne
+        socket.onerror = (e) => {
+            console.log("socket error", e);
+        };
+
+        // kun yhteys sulkeutuu, tullaan tänne
+        socket.onclose = (e) => {
+            // wasClean on boolean, jos true, se tarkoittaa, että yhteys katkesi toivotusti (esim. käyttäjä poistui chatista)
+            if (e.wasClean) {
+                console.log("bye bye");
+            } else {
+                // jos wasClean on false, se tarkoittaa, että esim. serveri on nurin
+                console.log("something bad");
+                // tästä syystä yritetään yhdistää uudelleen 2 sekunnin välein
+                reconnectInterval = setTimeout(() => {
+                    console.log("reconnecting");
+                    connect();
+                }, 2000);
+            }
+        };
+
+        // serveriltä tulee viesti, niin tullaan tänne
+        socket.onmessage = (m) => {
+            times = defaultTimes.slice();
+            _getBookings();
+        };
+    }
 </script>
 
 <div class="container">

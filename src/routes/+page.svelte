@@ -1,21 +1,28 @@
 <script>
     import { onMount, tick } from "svelte";
-
+    // ajat alkaa 8 päättyy 16
     let start = 8;
     let end = 16;
+    // tehdaan 8 * 4 slottia aikoja varten, koska varattavat ajat on 15 minuutin välein (4 aikaa tunnissa)
     let times = new Array((end - start) * 4);
     times = times.fill(0).slice();
     let hour = start;
     let hourChange = 1;
 
+    // interval on se funktio joka päivittää 2 sekunnin välein ajat
     let interval = null;
+    // jos usePolling on true socketit ei ole käytössä
     let usePolling = true;
+
+    // times-array sisältää ajat näin:
+    //[{t: 8:00, own: false}, {t: 8:15, own: false}, {t:8:30, own: false}, {t: 8:45, own: false}, {t:9:00, own: false}] ...jne
 
     times = times.map(() => {
         if (hourChange % 5 == 0) {
             hour += 1;
             hourChange = 1;
         }
+        // vaihdetaan tasatuntia 4 välein
         let min = (hourChange - 1) * 15;
         if (min == 0) {
             min = "00";
@@ -24,7 +31,12 @@
 
         return { t: `${hour}:${min}`, own: false };
     });
+    // kopioidaan defaultTimes muuttujaan oletusajat ennen yhtään varausta, jotta niihin voidaan palata
+    let defaultTimes = times.slice();
 
+    // splitataan aikaleima (esim 8:15) kaksoispisteestä, ja läheteään vuosi, kuukausi, päivä, tunti, minuutti ja booking_reference backendiin
+    // jos varattua aikaa ollaan peruuttamassa tämä funktio poistaa jo varatun ajan appointments-taulusta
+    // jos taas aika on ollu aiemmin vapaana, aika lisätään booking_referencen osoittamaan varaukseen
     async function _book(time) {
         try {
             const now = new Date();
@@ -68,6 +80,10 @@
         }
     }
 
+    // book luo booking-tauluun uuden rivin, jolla on uuid booking_reference (random merkkjono)
+    // ja palauttaa jwt-tokenin, jonka sub on tuo booking_reference
+    // jos varaus on luotu jo aiemmin (eli localstoragesta löytyy booking_ref-nminen token)
+    // lisätään uusia aikoja tähän oo. varaukseen tai poistetaan siitä aiemmin varattuja aikoja
     async function book(time) {
         let bookingRef = localStorage.getItem("booking_ref");
         try {
@@ -89,13 +105,15 @@
                 const tokenRes = await res.json();
                 localStorage.setItem("booking_ref", tokenRes.token);
             }
-
+            // _book lisää varsinaisen ajan varaukseen
             await _book(time.t);
         } catch (e) {
             console.log(e);
         }
     }
 
+    // tämä funktio hakee sekä omat varatut ajat, että muiden varaamat ajat ja palauttaa ne tällaisessa muodossa
+    // [{hour: 8, min: 15, own: true / false}]
     async function _getBookings() {
         let headers = {
             "content-type": "application/json",
@@ -112,7 +130,8 @@
 
         const bookings = await res.json();
 
-        times = times.filter((time) => {
+        // poistetaan muiden varaamat ajat kokonaan listasta, koska et voi varata niitä
+        times = defaultTimes.filter((time) => {
             let splitTime = time.t.split(":");
             let isBookedByOthers = bookings.bookings.find((b) => {
                 return (
@@ -122,7 +141,9 @@
 
             return !isBookedByOthers;
         });
-
+        // sen jälkeen, muutetaan kaikkien omien varausten own-attribuutin arvoksi true
+        // koska itselle varaamat ajat näkyvät vihreänä näytöllä
+        // vapaat ajat sinisinä ja muiden varaamat ajat eivät ole ollenkaan näkyvissä
         times = times.map((time) => {
             let splitTime = time.t.split(":");
             let isMine = bookings.bookings.find((b) => {
@@ -133,10 +154,12 @@
         });
     }
 
+    // odotetaan, että sivu on kunnolla latautunut, ennen kuin päivitetään varaustilanne
     onMount(async () => {
         await tick();
         await _getBookings();
 
+        // jos usePolling on true, päivitetään varaustilanne 2 sekunnin välein
         if (usePolling) {
             interval = setInterval(async () => {
                 console.log("interval");
@@ -146,6 +169,7 @@
     });
 </script>
 
+<!-- html:ssä napin css vaihtuu sen mukaan, onko käyttäjä varannut ajan itse, vai onko se vapaa -->
 <div class="container">
     <div class="row">
         {#each times as time (time)}

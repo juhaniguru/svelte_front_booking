@@ -141,6 +141,7 @@
 
             return !isBookedByOthers;
         });
+
         // sen jälkeen, muutetaan kaikkien omien varausten own-attribuutin arvoksi true
         // koska itselle varaamat ajat näkyvät vihreänä näytöllä
         // vapaat ajat sinisinä ja muiden varaamat ajat eivät ole ollenkaan näkyvissä
@@ -160,6 +161,7 @@
         await _getBookings();
 
         // jos usePolling on true, päivitetään varaustilanne 2 sekunnin välein
+        // tämä siksi, että jos usePolling on false, käytetään websocket-yhteyttä, mutta sitä ei ole vielä tehty
         if (usePolling) {
             interval = setInterval(async () => {
                 console.log("interval");

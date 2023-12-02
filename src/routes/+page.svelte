@@ -34,55 +34,9 @@
     // kopioidaan defaultTimes muuttujaan oletusajat ennen yhtään varausta, jotta niihin voidaan palata
     let defaultTimes = times.slice();
 
-    // splitataan aikaleima (esim 8:15) kaksoispisteestä, ja läheteään vuosi, kuukausi, päivä, tunti, minuutti ja booking_reference backendiin
-    // jos varattua aikaa ollaan peruuttamassa tämä funktio poistaa jo varatun ajan appointments-taulusta
-    // jos taas aika on ollu aiemmin vapaana, aika lisätään booking_referencen osoittamaan varaukseen
-    async function _book(time) {
-        try {
-            const now = new Date();
-            let splitTime = time.split(":");
-            let hour = parseInt(splitTime[0]);
-            let m = 0;
-            if (splitTime[1] != "00") {
-                m = parseInt(splitTime[1]);
-            }
-            const res = await fetch(
-                "http://localhost:8001/api/v1/booking/appointment/",
-                {
-                    headers: {
-                        "content-type": "application/json",
-                    },
-                    method: "POST",
-                    body: JSON.stringify({
-                        year: now.getFullYear(),
-                        month: now.getMonth() + 1,
-                        day: now.getDay(),
-                        hour: hour,
-                        min: m,
-                        booking_reference: localStorage.getItem("booking_ref"),
-                    }),
-                },
-            );
-            if (!res.ok) {
-                throw new Error(res.statusText);
-            }
-
-            times = times.map((time) => {
-                let splitTime = time.t.split(":");
-                if (splitTime[0] == hour && splitTime[1] == m) {
-                    time = { ...time, own: !time.own };
-                }
-
-                return time;
-            });
-        } catch (e) {
-            console.log(e);
-        }
-    }
-
     // book luo booking-tauluun uuden rivin, jolla on uuid booking_reference (random merkkjono)
     // ja palauttaa jwt-tokenin, jonka sub on tuo booking_reference
-    // jos varaus on luotu jo aiemmin (eli localstoragesta löytyy booking_ref-nminen token)
+    // jos varaus on luotu jo aiemmin (eli localstoragesta löytyy booking_ref-niminen token)
     // lisätään uusia aikoja tähän oo. varaukseen tai poistetaan siitä aiemmin varattuja aikoja
     async function book(time) {
         let bookingRef = localStorage.getItem("booking_ref");
@@ -112,13 +66,64 @@
         }
     }
 
+    // splitataan aikaleima (esim 8:15) kaksoispisteestä, ja läheteään vuosi, kuukausi, päivä, tunti, minuutti ja booking_reference backendiin
+    // jos varattua aikaa ollaan peruuttamassa tämä funktio poistaa jo varatun ajan appointments-taulusta
+    // jos taas aika on ollu aiemmin vapaana, aika lisätään booking_referencen osoittamaan varaukseen
+    async function _book(time) {
+        try {
+            const now = new Date();
+            let splitTime = time.split(":");
+            let hour = parseInt(splitTime[0]);
+            let m = 0;
+            if (splitTime[1] != "00") {
+                m = parseInt(splitTime[1]);
+            }
+            const res = await fetch(
+                "http://localhost:8001/api/v1/booking/appointment/",
+                {
+                    headers: {
+                        "content-type": "application/json",
+                    },
+                    method: "POST",
+                    body: JSON.stringify({
+                        year: now.getFullYear(),
+                        month: now.getMonth() + 1,
+                        day: now.getDay(),
+                        hour: hour,
+                        min: m,
+                        // localstoragen sijaan, tämä olisi hyvä tallentaa keksiin, mutta tässä esimerkissä tietoturva ei ole tärkein pointti
+                        // menin sen vuoksi helpommalla tavalla
+                        booking_reference: localStorage.getItem("booking_ref"),
+                    }),
+                },
+            );
+            if (!res.ok) {
+                throw new Error(res.statusText);
+            }
+
+            // togletetaan own arvo truesta falseksi tai toisinpäin riippuen siitä, ollaanko poistamassa aiemmin varattu aika vai
+            // varaamassa aiemmin vapaata aikaa
+            times = times.map((time) => {
+                let splitTime = time.t.split(":");
+                if (splitTime[0] == hour && splitTime[1] == m) {
+                    time = { ...time, own: !time.own };
+                }
+
+                return time;
+            });
+        } catch (e) {
+            console.log(e);
+        }
+    }
+
     // tämä funktio hakee sekä omat varatut ajat, että muiden varaamat ajat ja palauttaa ne tällaisessa muodossa
     // [{hour: 8, min: 15, own: true / false}]
     async function _getBookings() {
         let headers = {
             "content-type": "application/json",
         };
-
+        // jos olet ensimmäistä kertaa varamassa aikaa, sinulla ei ole oo. booking_refiä,
+        // ja siksi x-booking-ref lisätään vain jos jwt löytyy localstoragesta
         if (localStorage.getItem("booking_ref") != null) {
             headers["x-booking-ref"] = `Bearer ${localStorage.getItem(
                 "booking_ref",
@@ -176,6 +181,7 @@
     <div class="row">
         {#each times as time (time)}
             <div class="col">
+                <!-- book joko poistaa varatun ajan tai varaa aiemmin vapaan ajan -->
                 <button
                     on:click={() => {
                         book(time);

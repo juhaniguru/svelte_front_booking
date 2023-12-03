@@ -113,6 +113,42 @@
             });
         } catch (e) {
             console.log(e);
+        } finally {
+            // jos käyttäjällä ei ole yhtään varattua aikaa, poistetaan myös varaus tietokannasta
+            let hasAppointmentsInBooking = times.find((time) => time.own);
+            if (!hasAppointmentsInBooking) {
+                await _removeBooking();
+            }
+        }
+    }
+
+    // poistaa bookinging tietokannasta käyttäen x-booking-ref headerissa olevaa jwt tokenia, jossa booking_ref
+    // jos bookingissa ei ole yhtään varattua aikaa
+    async function _removeBooking() {
+        try {
+            const headers = {
+                "content-type": "application/json",
+                "x-booking-ref": `Bearer ${localStorage.getItem(
+                    "booking_ref",
+                )}`,
+            };
+
+            const res = await fetch("http://localhost:8001/api/v1/booking/", {
+                headers,
+                method: "DELETE",
+            });
+
+            if (!res.ok) {
+                throw new Error(res.statusText);
+            }
+        } catch (e) {
+            console.log(e);
+
+            //  booking_ref poistetaan localstoragesta joka tapauksessa onnistui poisto tai ei
+            // koska poisto ei onnistu, jos varausta ei olemassakaan
+            // ja tällöin booking_refin säilyttäminen on turhaa
+        } finally {
+            localStorage.removeItem("booking_ref");
         }
     }
 

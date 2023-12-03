@@ -15,7 +15,7 @@
     let hourChange = 1;
 
     // jos usePolling on true socketit ei ole käytössä
-    let usePolling = true;
+    let usePolling = false;
 
     // times-array sisältää ajat näin:
     //[{t: 8:00, own: false}, {t: 8:15, own: false}, {t:8:30, own: false}, {t: 8:45, own: false}, {t:9:00, own: false}] ...jne
